@@ -69,7 +69,7 @@ class ObsManager(ObsManagerBase):
         self._parent_actor = parent_actor
         self._world = self._parent_actor.vehicle.get_world()
 
-        maps_h5_path = self._map_dir / (self._world.get_map().name + '.h5')
+        maps_h5_path = self._map_dir / (self._world.get_map().name.split('/')[-1] + '.h5')
         with h5py.File(maps_h5_path, 'r', libver='latest', swmr=True) as hf:
             self._road = np.array(hf['road'], dtype=np.uint8)
             self._lane_marking_all = np.array(hf['lane_marking_all'], dtype=np.uint8)
@@ -116,8 +116,10 @@ class ObsManager(ObsManagerBase):
             c_ev = abs(ev_loc.x - w.location.x) < 1.0 and abs(ev_loc.y - w.location.y) < 1.0
             return c_distance and (not c_ev)
 
-        vehicle_bbox_list = self._world.get_level_bbs(carla.CityObjectLabel.Vehicles)
-        walker_bbox_list = self._world.get_level_bbs(carla.CityObjectLabel.Pedestrians)
+        # vehicle_bbox_list = self._world.get_level_bbs(carla.CityObjectLabel.Vehicles)
+        # walker_bbox_list = self._world.get_level_bbs(carla.CityObjectLabel.Pedestrians)
+        vehicle_bbox_list = [actor.bounding_box for actor in self._world.get_actors().filter('vehicle.*')]
+        walker_bbox_list = [actor.bounding_box for actor in self._world.get_actors().filter('walker.*')]
         if self._scale_bbox:
             vehicles = self._get_surrounding_actors(vehicle_bbox_list, is_within_distance, 1.0)
             walkers = self._get_surrounding_actors(walker_bbox_list, is_within_distance, 2.0)
@@ -232,8 +234,10 @@ class ObsManager(ObsManagerBase):
         for sp_locs in stopline_vtx:
             stopline_in_pixel = np.array([[self._world_to_pixel(x)] for x in sp_locs])
             stopline_warped = cv.transform(stopline_in_pixel, M_warp)
-            cv.line(mask, tuple(stopline_warped[0, 0]), tuple(stopline_warped[1, 0]),
-                    color=1, thickness=6)
+            # cv.line(mask, tuple(stopline_warped[0, 0]), tuple(stopline_warped[1, 0]), color=1, thickness=6)
+            pt1 = (int(stopline_warped[0, 0][0]), int(stopline_warped[0, 0][1]))
+            pt2 = (int(stopline_warped[1, 0][0]), int(stopline_warped[1, 0][1]))
+            cv.line(mask, pt1, pt2, color=1, thickness=6)
         return mask.astype(np.bool)
 
     def _get_mask_from_actor_list(self, actor_list, M_warp):
