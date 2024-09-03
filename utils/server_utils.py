@@ -41,7 +41,8 @@ class CarlaServerManager():
         kill_carla()
         for cfg in self.env_configs:
             cmd = f'CUDA_VISIBLE_DEVICES={cfg["gpu"]} bash {self._carla_sh_str} ' \
-                f'-fps=10 -quality-level=Epic -carla-rpc-port={cfg["port"]}'
+                f'-fps=10 -RenderOffScreen -carla-rpc-port={cfg["port"]} '
+                # f'-fps=10 -quality-level=Epic -carla-rpc-port={cfg["port"]} ' \
             #     f'-fps=10 -carla-server -opengl -carla-rpc-port={cfg["port"]}'
             log.info(cmd)
             # log_file = self._root_save_dir / f'server_{cfg["port"]}.log'

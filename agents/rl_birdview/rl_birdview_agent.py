@@ -22,19 +22,20 @@ class RlBirdviewAgent():
             api = wandb.Api()
             run = api.run(cfg.wb_run_path)
             all_ckpts = [f for f in run.files() if 'ckpt' in f.name]
-
-            if cfg.wb_ckpt_step is None:
-                f = max(all_ckpts, key=lambda x: int(x.name.split('_')[1].split('.')[0]))
-                self._logger.info(f'Resume checkpoint latest {f.name}')
+            if all_ckpts:
+                if cfg.wb_ckpt_step is None:
+                    f = max(all_ckpts, key=lambda x: int(x.name.split('_')[1].split('.')[0]))
+                    self._logger.info(f'Resume checkpoint latest {f.name}')
+                else:
+                    wb_ckpt_step = int(cfg.wb_ckpt_step)
+                    f = min(all_ckpts, key=lambda x: abs(int(x.name.split('_')[1].split('.')[0]) - wb_ckpt_step))
+                    self._logger.info(f'Resume checkpoint closest to step {wb_ckpt_step}: {f.name}')
+                f.download(replace=True)
+                self._ckpt = f.name
             else:
-                wb_ckpt_step = int(cfg.wb_ckpt_step)
-                f = min(all_ckpts, key=lambda x: abs(int(x.name.split('_')[1].split('.')[0]) - wb_ckpt_step))
-                self._logger.info(f'Resume checkpoint closest to step {wb_ckpt_step}: {f.name}')
-
-            f.download(replace=True)
+                self._ckpt = None
             run.file('config_agent.yaml').download(replace=True)
             cfg = OmegaConf.load('config_agent.yaml')
-            self._ckpt = f.name
         else:
             self._ckpt = None
 

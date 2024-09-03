@@ -16,8 +16,12 @@ train_rl () {
 
 # NO NEED TO MODIFY THE FOLLOWING
 # actiate conda env
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate carla
+# source ~/miniconda3/etc/profile.d/conda.sh
+
+source /mnt/afs/user/zhaoyanxiao/miniconda3/bin/activate /mnt/afs/user/zhaoyanxiao/.conda/envs/roach
+
+# source /mnt/afs/user/zhaoyanxiao/miniconda3/etc/profile.d/conda.sh
+# conda activate /mnt/afs/user/xudongyang/.conda/envs/roach
 
 # resume benchmark in case carla is crashed.
 RED=$'\e[0;31m'
