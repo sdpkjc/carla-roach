@@ -58,6 +58,7 @@ class PPO():
         self.buffer = PpoBuffer(self.n_steps, self.env.observation_space, self.env.action_space,
                                 gamma=self.gamma, gae_lambda=self.gae_lambda, n_envs=self.env.num_envs)
         self.policy = self.policy.to(self.policy.device)
+        self.optimizer = th.optim.Adam(self.policy.parameters(), **{'eps': 1e-5})
 
         model_parameters = filter(lambda p: p.requires_grad, self.policy.parameters())
         total_params = sum([np.prod(p.size()) for p in model_parameters])
@@ -74,7 +75,7 @@ class PPO():
         self.sigma_statistics = []
 
         while n_steps < n_rollout_steps:
-            actions, values, log_probs, mu, sigma, _ = self.policy.forward(self._last_obs)
+            actions, values, log_probs, mu, sigma, _ = self.policy.forward("forward", self._last_obs)
             self.action_statistics.append(actions)
             self.mu_statistics.append(mu)
             self.sigma_statistics.append(sigma)
@@ -95,13 +96,13 @@ class PPO():
             self._last_obs = new_obs
             self._last_dones = dones
 
-        last_values = self.policy.forward_value(self._last_obs)
+        last_values = self.policy.forward("forward_value", self._last_obs)
         rollout_buffer.compute_returns_and_advantage(last_values, dones=self._last_dones)
 
         return True
 
     def train(self):
-        for param_group in self.policy.optimizer.param_groups:
+        for param_group in self.optimizer.param_groups:
             param_group["lr"] = self.learning_rate
 
         entropy_losses, exploration_losses, pg_losses, value_losses, losses = [], [], [], [], []
@@ -125,7 +126,7 @@ class PPO():
                         time.sleep(0.01)
                 rollout_data = self.buffer.sample_queue.get()
 
-                values, log_prob, entropy_loss, exploration_loss, distribution = self.policy.evaluate_actions(
+                values, log_prob, entropy_loss, exploration_loss, distribution = self.policy.forward("evaluate_actions",
                     rollout_data.observations, rollout_data.actions, rollout_data.exploration_suggests,
                     detach_values=False)
                 # Normalize advantage
@@ -139,7 +140,6 @@ class PPO():
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * th.clamp(ratio, 1 - self.clip_range, 1 + self.clip_range)
                 policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
-
                 # Logging
                 clip_fraction = th.mean((th.abs(ratio - 1) > self.clip_range).float()).item()
                 clip_fractions.append(clip_fraction)
@@ -165,14 +165,14 @@ class PPO():
                 exploration_losses.append(exploration_loss.item())
 
                 # Optimization step
-                self.policy.optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 loss.backward()
                 # Clip grad norm
                 th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
-                self.policy.optimizer.step()
+                self.optimizer.step()
 
                 with th.no_grad():
-                    old_distribution = self.policy.action_dist.proba_distribution(
+                    old_distribution = self.policy.module.action_dist.proba_distribution(
                         rollout_data.old_mu, rollout_data.old_sigma)
                     kl_div = th.distributions.kl_divergence(old_distribution.distribution, distribution)
 
@@ -189,7 +189,7 @@ class PPO():
             # update advantages
             if self.update_adv:
                 self.buffer.update_values(self.policy)
-                last_values = self.policy.forward_value(self._last_obs)
+                last_values = self.policy.forward("forward_value", self._last_obs)
                 self.buffer.compute_returns_and_advantage(last_values, dones=self._last_dones)
 
         explained_var = explained_variance(self.buffer.returns.flatten(), self.buffer.values.flatten())
@@ -268,8 +268,8 @@ class PPO():
         return init_kwargs
 
     def save(self, path: str) -> None:
-        th.save({'policy_state_dict': self.policy.state_dict(),
-                 'policy_init_kwargs': self.policy.get_init_kwargs(),
+        th.save({'policy_state_dict': self.policy.module.state_dict(),
+                 'policy_init_kwargs': self.policy.module.get_init_kwargs(),
                  'train_init_kwargs': self._get_init_kwargs()},
                 path)
 

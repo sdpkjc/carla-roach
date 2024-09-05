@@ -33,8 +33,8 @@ class PpoPolicy(nn.Module):
         else:
             self.device = 'cpu'
 
-        self.optimizer_class = th.optim.Adam
-        self.optimizer_kwargs = {'eps': 1e-5}
+        # self.optimizer_class = th.optim.Adam
+        # self.optimizer_kwargs = {'eps': 1e-5}
 
         features_extractor_class = load_entry_point(features_extractor_entry_point)
         self.features_extractor = features_extractor_class(observation_space, **features_extractor_kwargs)
@@ -100,7 +100,7 @@ class PpoPolicy(nn.Module):
             for module, gain in module_gains.items():
                 module.apply(partial(self.init_weights, gain=gain))
 
-        self.optimizer = self.optimizer_class(self.parameters(), **self.optimizer_kwargs)
+        # self.optimizer = self.optimizer_class(self.parameters(), **self.optimizer_kwargs)
 
     def _get_features(self, birdview: th.Tensor, state: th.Tensor) -> th.Tensor:
         """
@@ -119,6 +119,24 @@ class PpoPolicy(nn.Module):
         else:
             sigma = self.dist_sigma(latent_pi)
         return self.action_dist.proba_distribution(mu, sigma), mu.detach().cpu().numpy(), sigma.detach().cpu().numpy()
+
+    def forward(self, mode="forward", *args, **kwargs):
+        if mode == "forward":
+            return self._forward(*args, **kwargs)
+        elif mode == "evaluate_actions":
+            return self.evaluate_actions(*args, **kwargs)
+        elif mode == "evaluate_values":
+            return self.evaluate_values(*args, **kwargs)
+        elif mode == "forward_value":
+            return self.forward_value(*args, **kwargs)
+        elif mode == "forward_policy":
+            return self.forward_policy(*args, **kwargs)
+        elif mode == "scale_action":
+            return self.scale_action(*args, **kwargs)
+        elif mode == "unscale_action":
+            return self.unscale_action(*args, **kwargs)
+        elif mode == "get_init_kwargs":
+            return self.get_init_kwargs(*args, **kwargs)
 
     def evaluate_actions(self, obs_dict: Dict[str, th.Tensor], actions: th.Tensor, exploration_suggests,
                          detach_values=False):
@@ -142,7 +160,7 @@ class PpoPolicy(nn.Module):
         distribution, mu, sigma = self._get_action_dist_from_features(features)
         return values.flatten(), distribution.distribution
 
-    def forward(self, obs_dict: Dict[str, np.ndarray], deterministic: bool = False, clip_action: bool = False):
+    def _forward(self, obs_dict: Dict[str, np.ndarray], deterministic: bool = False, clip_action: bool = False):
         '''
         used in collect_rollouts(), do not clamp actions
         '''

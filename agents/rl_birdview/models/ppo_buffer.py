@@ -47,7 +47,7 @@ class PpoBuffer():
         self.pos = 0
         self.full = False
         if th.cuda.is_available():
-            self.device = 'cuda'
+            self.device = th.cuda.current_device()
         else:
             self.device = 'cpu'
 
@@ -135,7 +135,7 @@ class PpoBuffer():
             obs_dict = {}
             for k in self.observations.keys():
                 obs_dict[k] = self.observations[k][i]
-            values = policy.forward_value(obs_dict)
+            values = policy.forward("forward_value", obs_dict)
             self.values[i] = values
 
     def get(self, batch_size: Optional[int] = None) -> Generator[PpoBufferSamples, None, None]:

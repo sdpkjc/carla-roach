@@ -3,22 +3,24 @@ import numpy as np
 from omegaconf import OmegaConf
 import wandb
 import copy
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from carla_gym.utils.config_utils import load_entry_point
 
 
 class RlBirdviewAgent():
-    def __init__(self, path_to_conf_file='config_agent.yaml'):
+    def __init__(self, path_to_conf_file='config_agent.yaml', rank=0, world_size=2):
         self._logger = logging.getLogger(__name__)
         self._render_dict = None
         self.supervision_dict = None
+        self.rank, self.world_size = rank, world_size
         self.setup(path_to_conf_file)
 
     def setup(self, path_to_conf_file):
         cfg = OmegaConf.load(path_to_conf_file)
 
         # load checkpoint from wandb
-        if cfg.wb_run_path is not None:
+        if cfg.wb_run_path is not None and self.rank == 0:
             api = wandb.Api()
             run = api.run(cfg.wb_run_path)
             all_ckpts = [f for f in run.files() if 'ckpt' in f.name]
@@ -53,6 +55,8 @@ class RlBirdviewAgent():
             self._logger.info(f'Loading wandb checkpoint: {self._ckpt}')
             self._policy, self._train_cfg['kwargs'] = self._policy_class.load(self._ckpt)
             self._policy = self._policy.eval()
+            self._policy = self._policy.to(self.rank)
+            self._policy = DDP(self._policy, device_ids=[self.rank], find_unused_parameters=True)
 
         self._wrapper_class = load_entry_point(cfg['env_wrapper']['entry_point'])
         self._wrapper_kwargs = cfg['env_wrapper']['kwargs']
@@ -101,6 +105,8 @@ class RlBirdviewAgent():
     def learn(self, env, total_timesteps, callback, seed):
         if self._policy is None:
             self._policy = self._policy_class(env.observation_space, env.action_space, **self._policy_kwargs)
+            self._policy = self._policy.to(self.rank)
+            self._policy = DDP(self._policy, device_ids=[self.rank], find_unused_parameters=True)
 
         # init ppo model
         model_class = load_entry_point(self._train_cfg['entry_point'])
